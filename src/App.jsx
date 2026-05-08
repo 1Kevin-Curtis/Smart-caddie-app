@@ -1,66 +1,479 @@
 import React, { useMemo, useState } from "react";
-import "./styles.css";
 
-const screens = ["welcome", "profile", "home", "ready", "round", "hole", "review", "plan", "prompt", "practice", "progress"];
-const labels = { welcome: "Welcome", profile: "Profile", home: "Home", ready: "Ready to Play", round: "Round", hole: "Hole input", review: "Round review", plan: "Next Round Plan", prompt: "Smart prompt", practice: "Practice", progress: "Progress" };
-const pars = [4,5,3,4,4,3,4,5,4,4,3,5,4,4,3,4,5,4];
+const screens = [
+  "welcome",
+  "profile",
+  "home",
+  "ready_to_play",
+  "round_capture",
+  "hole_detail",
+  "round_summary",
+  "next_plan",
+  "in_round",
+  "practice",
+  "progress",
+];
 
-function initialRound(){
-  return Array.from({length:18},(_,i)=>({
-    hole:i+1, par:pars[i], score:pars[i]+1, saved:i<4,
-    tee:i===1?["Miss right"]:i===3?["Fairway hit"]:[],
-    approach:i===1||i===2?["Miss short"]:i===3?["Green hit"]:[],
-    green:i===2?["Poor chip"]:[], putting:i===0?["2-putt"]:i===1?["3-putt"]:[]
+const screenLabels = {
+  welcome: "Welcome",
+  profile: "Golfer profile",
+  home: "Home",
+  ready_to_play: "Ready to Play",
+  round_capture: "Round capture",
+  hole_detail: "Hole detail",
+  round_summary: "Round summary",
+  next_plan: "Next Round Plan",
+  in_round: "Smart prompt",
+  practice: "Practice plan",
+  progress: "Progress",
+};
+
+const holePars = [4, 5, 3, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4];
+
+function buildInitialRound() {
+  return Array.from({ length: 18 }, (_, i) => ({
+    hole: i + 1,
+    par: holePars[i],
+    score: holePars[i] + 1,
+    saved: i < 4,
+    tee: i === 1 ? ["Miss right"] : i === 3 ? ["Fairway hit"] : [],
+    approach: i === 1 || i === 2 ? ["Miss short"] : i === 3 ? ["Green hit"] : [],
+    aroundGreen: i === 2 ? ["Poor chip"] : [],
+    putting: i === 0 ? ["2-putt"] : i === 1 ? ["3-putt"] : [],
   }));
 }
 
-function analyse(round){
-  const saved=round.filter(h=>h.saved); const sample=saved.length?saved:round.slice(0,4);
-  const count=(fn)=>sample.filter(fn).length;
-  const short=count(h=>h.approach.includes("Miss short"));
-  const right=count(h=>h.tee.includes("Miss right"));
-  const penalty=count(h=>h.tee.includes("Penalty")||h.green.includes("Bunker miss"));
-  const putts=count(h=>h.putting.includes("3-putt"));
-  const chips=count(h=>h.green.includes("Poor chip"));
-  const early=count(h=>h.hole<=3&&h.score>h.par+1);
-  const front=count(h=>h.hole<=9);
-  const items=[];
-  if(short>=2) items.push({title:"Approach pattern", detail:"Most missed greens came from approaches finishing short.", source:`Based on ${sample.length} logged holes`, action:"Club up and aim for the middle of the green.", confidence:"Strong pattern"});
-  if(right>=1||penalty>=1) items.push({title:"Tee-shot risk", detail:"Right-side misses are creating recovery shots and bringing doubles into play.", source:"Seen across your saved holes", action:"Use a safer club when trouble sits right.", confidence:"Worth watching"});
-  if(putts>=1) items.push({title:"Putting distance control", detail:"The biggest putting risk is leaving yourself too much work from the first putt.", source:"Observed from post-hole putting tags", action:"Lag first putts into a 3ft circle.", confidence:"Early signal"});
-  if(chips>=1) items.push({title:"Around the green", detail:"Short-game mistakes are turning missed greens into dropped shots.", source:"Based on your around-green tags", action:"Get the first chip on the green before chasing the flag.", confidence:"Early signal"});
-  if(early>=1||front>=3) items.push({title:"Opening holes", detail:"Your early holes need a steadier start and fewer aggressive choices.", source:"Based on your first few logged holes", action:"Play the first three holes with the safest target in mind.", confidence:"Recurring phase to track"});
-  if(!items.length) items.push({title:"Course management", detail:"No major leak stands out yet. Keep logging to build a clearer pattern.", source:"Based on the holes saved so far", action:"Choose the shot that removes the worst miss.", confidence:"Needs more rounds"});
-  return items.slice(0,3);
+function analyseRound(round) {
+  const saved = round.filter((h) => h.saved);
+  const sample = saved.length ? saved : round.slice(0, 4);
+
+  const shortApproaches = sample.filter((h) => h.approach.includes("Miss short")).length;
+  const teeMissRight = sample.filter((h) => h.tee.includes("Miss right")).length;
+  const penalties = sample.filter((h) => h.tee.includes("Penalty") || h.aroundGreen.includes("Bunker miss")).length;
+  const threePutts = sample.filter((h) => h.putting.includes("3-putt")).length;
+  const poorChips = sample.filter((h) => h.aroundGreen.includes("Poor chip")).length;
+  const completedFront = sample.filter((h) => h.hole <= 9).length;
+  const frontNineDrops = sample.filter((h) => h.hole <= 3 && h.score > h.par + 1).length;
+
+  const insights = [];
+
+  if (shortApproaches >= 2) {
+    insights.push({
+      title: "Approach pattern",
+      detail: "Most missed greens came from approaches finishing short.",
+      source: `Based on ${sample.length} logged holes`,
+      action: "Club up and aim for the middle of the green.",
+      confidence: "Strong pattern",
+    });
+  }
+
+  if (teeMissRight >= 1 || penalties >= 1) {
+    insights.push({
+      title: "Tee-shot risk",
+      detail: "Right-side misses are creating recovery shots and bringing doubles into play.",
+      source: `Seen across your saved holes`,
+      action: "Use a safer club when trouble sits right.",
+      confidence: "Worth watching",
+    });
+  }
+
+  if (threePutts >= 1) {
+    insights.push({
+      title: "Putting distance control",
+      detail: "The biggest putting risk is leaving yourself too much work from the first putt.",
+      source: "Observed from post-hole putting tags",
+      action: "Lag first putts into a 3ft circle.",
+      confidence: "Early signal",
+    });
+  }
+
+  if (poorChips >= 1) {
+    insights.push({
+      title: "Around the green",
+      detail: "Short-game mistakes are turning missed greens into dropped shots.",
+      source: "Based on your around-green tags",
+      action: "Get the first chip on the green before chasing the flag.",
+      confidence: "Early signal",
+    });
+  }
+
+  if (frontNineDrops >= 1 || completedFront >= 3) {
+    insights.push({
+      title: "Opening holes",
+      detail: "Your early holes need a steadier start and fewer aggressive choices.",
+      source: "Based on your first few logged holes",
+      action: "Play the first three holes with the safest target in mind.",
+      confidence: "Recurring phase to track",
+    });
+  }
+
+  if (!insights.length) {
+    insights.push({
+      title: "Course management",
+      detail: "No major leak stands out yet. Keep logging to build a clearer pattern.",
+      source: "Based on the holes saved so far",
+      action: "Choose the shot that removes the worst miss.",
+      confidence: "Needs more rounds",
+    });
+  }
+
+  return insights.slice(0, 3);
 }
 
-function Phone({children}){return <main className="page"><section className="phone"><div className="notch"/><div className="screen">{children}</div></section></main>}
-function Header({title,sub,back,hideBack}){return <div className="header">{!hideBack&&<button className="back" onClick={back}>‹</button>}<div><h2>{title}</h2>{sub&&<p>{sub}</p>}</div></div>}
-function Card({children,dark=false,soft=false}){return <div className={`card ${dark?"dark":""} ${soft?"soft":""}`}>{children}</div>}
-function Btn({children,onClick,secondary=false}){return <button onClick={onClick} className={`btn ${secondary?"secondary":""}`}>{children}</button>}
-function Pill({children,on,click}){return <button onClick={click} className={`pill ${on?"on":""}`}>{children}</button>}
-function Nav({go}){return <div className="nav">{[["home","⛳","Home"],["ready","◌","Ready"],["round","＋","Round"],["plan","◎","Plan"],["practice","◉","Practice"]].map(([s,i,t])=><button key={s} onClick={()=>go(s)}><span>{i}</span>{t}</button>)}</div>}
+function Icon({ symbol, size = 18, className = "" }) {
+  return (
+    <span className={`inline-flex items-center justify-center leading-none ${className}`} style={{ width: size, height: size, fontSize: size * 0.9 }} aria-hidden="true">
+      {symbol}
+    </span>
+  );
+}
 
-function Welcome({go}){return <Phone><div className="stack fill"><div><div className="logo">⛳</div><h1>Sugar Caddie</h1><p className="lead">An easier way to track a round, spot patterns and play the next one with a clearer plan.</p></div><Card><ul><li>Simple post-hole tracking</li><li>Clear insight from your playing patterns</li><li>Practice that transfers to the course</li></ul></Card><Btn onClick={()=>go("profile")}>Get started</Btn></div></Phone>}
-function Profile({go,back}){const[h,setH]=useState(14),[goal,setGoal]=useState("Break 80");return <Phone><Header title="Your golfer profile" sub="A quick setup so advice feels relevant." back={back}/><div className="stack"><Card><p className="eyebrow">Current handicap</p><div className="counter"><button onClick={()=>setH(Math.max(1,h-1))}>−</button><strong>{h}</strong><button onClick={()=>setH(h+1)}>+</button></div></Card><div><p className="eyebrow">Main goal</p><div className="pills">{["Break 90","Break 85","Break 80","Single figures"].map(x=><Pill key={x} on={goal===x} click={()=>setGoal(x)}>{x}</Pill>)}</div></div><Btn onClick={()=>go("home")}>Continue</Btn></div></Phone>}
-function Home({go,back}){return <Phone><Header title="Today" sub="Get ready, play, then review what mattered." hideBack/><div className="stack"><Card dark><p className="eyebrow light">Before you tee off</p><h2>Ready to Play</h2><p>A short warm-up to loosen up, find rhythm and settle your first tee focus.</p><button className="white" onClick={()=>go("ready")}>Start prep</button></Card><Card><h3>How better rounds are built</h3><p className="muted">A simple rhythm that helps you learn from each round and carry improvements into the next one.</p><div className="journey">{["Play","Review","Practise","Improve"].map((x,i)=><React.Fragment key={x}><div><b>{i+1}</b><span>{x}</span></div>{i<3&&<em/>}</React.Fragment>)}</div></Card><Btn onClick={()=>go("round")}>Start round capture</Btn></div><Nav go={go}/></Phone>}
-function Ready({go,back}){const moves=["Shoulder turns","Hip openers","Hamstring sweep","Wrist circles","Three easy swings"];return <Phone><Header title="Ready to Play" sub="Four minutes. Calm body, clear first tee." back={back}/><div className="stack bottomGap"><Card dark><p className="eyebrow light">First tee reset</p><h2>Loosen up and find rhythm</h2><p>Simple movements you can do by the car park or practice green.</p><p className="note">Better starts usually lead to steadier opening holes.</p></Card>{moves.map((m,i)=><Card key={m}><div className="row"><b className="num">{i+1}</b><div><h3>{m}</h3><p className="muted">30–45 seconds. Smooth and easy.</p></div></div></Card>)}<Card><p className="eyebrow">First tee focus</p><h3>Pick a safe target. Commit to one smooth swing.</h3></Card><Btn onClick={()=>go("round")}>Start round</Btn></div><Nav go={go}/></Phone>}
-function HoleGrid({round,select}){return <div className="holes">{round.map((h,i)=><button key={h.hole} onClick={()=>select(i)} className={`${h.saved?"saved":""}`}><b>{h.hole}</b><span>{h.saved?"Saved":""}</span></button>)}</div>}
-function Round({go,back,round,setHole,lastSaved}){const done=round.filter(h=>h.saved).length;const current=round.find(h=>!h.saved)||round[17];return <Phone><Header title="Round capture" sub="Simple post-hole tracking" back={back}/><div className="stack bottomGap">{lastSaved&&<div className="savedMsg">Hole {lastSaved} saved. Ready for the next one.</div>}<Card><div className="between"><div><p className="eyebrow">Current hole</p><h2>Hole {current.hole}</h2></div><span className="badge">Par {current.par}</span></div><div className="bar"><i style={{width:`${done/18*100}%`}}/></div><p className="muted">{done} of 18 holes saved</p></Card><HoleGrid round={round} select={(i)=>{setHole(i);go("hole")}}/><Card soft>Most golfers log each hole walking to the next tee.</Card><Btn onClick={()=>go("review")}>Finish and review</Btn></div><Nav go={go}/></Phone>}
-function TagSection({title,hint,options,selected,toggle}){return <Card><h3>{title}</h3><p className="muted">{hint}</p><div className="pills">{options.map(o=><Pill key={o} on={selected.includes(o)} click={()=>toggle(o)}>{o}</Pill>)}</div></Card>}
-function Hole({go,back,round,setRound,hole,setHole,setLastSaved}){const h=round[hole];const update=p=>setRound(prev=>prev.map((x,i)=>i===hole?{...x,...p}:x));const toggle=(sec,tag)=>update({[sec]:h[sec].includes(tag)?h[sec].filter(x=>x!==tag):[...h[sec],tag]});const save=()=>{update({saved:true});setLastSaved(h.hole);setHole(Math.min(hole+1,17));go("round")};return <Phone><Header title={`Hole ${h.hole}`} sub={`Par ${h.par} · Quick round capture`} back={back}/><div className="stack scroll"><Card><p className="eyebrow">Score</p><div className="counter"><button onClick={()=>update({score:Math.max(1,h.score-1)})}>−</button><strong>{h.score}</strong><button onClick={()=>update({score:h.score+1})}>+</button></div></Card><TagSection title="Tee shot" hint="Only the first shot on par 4s and par 5s." options={["Fairway hit","Miss left","Miss right","Penalty","Recovery shot"]} selected={h.tee} toggle={t=>toggle("tee",t)}/><TagSection title="Approach" hint="The shot into the green." options={["Green hit","Miss short","Miss left","Miss right","Miss long"]} selected={h.approach} toggle={t=>toggle("approach",t)}/><TagSection title="Around green" hint="Only if you missed the green." options={["Up and down","Poor chip","Bunker miss","Good recovery"]} selected={h.green} toggle={t=>toggle("green",t)}/><TagSection title="Putting" hint="What happened once you reached the green." options={["1-putt","2-putt","3-putt"]} selected={h.putting} toggle={t=>toggle("putting",t)}/><Btn onClick={save}>Save hole and continue</Btn></div></Phone>}
-function Review({go,back,round}){const insights=analyse(round);return <Phone><Header title="Round review" sub="Clear patterns from your saved holes." back={back}/><div className="stack bottomGap"><Card dark><p className="eyebrow light">Round reflection</p><h2>You were closer than the score suggests</h2><p>Most dropped shots came from one recurring pattern rather than your whole game breaking down.</p><p className="note">{insights[0].source}</p></Card><Card><div className="between"><h3>What stayed solid</h3><span className="good">Positive trend</span></div><p>Your putting stayed steady and avoided extra damage once you reached the green.</p><p className="muted">Based on your saved holes</p></Card>{insights.map(x=><Card key={x.title}><div className="between"><h3>{x.title}</h3><span className="badge">{x.confidence}</span></div><p>{x.detail}</p><p className="muted">{x.source}</p></Card>)}<Card><p className="eyebrow">Credibility note</p><p>Your plan is based on repeated behaviours you logged during the round, not generic tips. More rounds will make the pattern clearer.</p></Card><div className="two"><Btn onClick={()=>go("plan")}>Next Round Plan</Btn><Btn secondary onClick={()=>go("practice")}>Practice ideas</Btn></div></div><Nav go={go}/></Phone>}
-function PlanCard({n,title,body,evidence}){return <Card><div className="row"><b className="num">{n}</b><div><h3>{title}</h3><p>{body}</p><p className="muted">{evidence}</p></div></div></Card>}
-function Plan({go,back,round}){const main=analyse(round)[0];return <Phone><Header title="Next Round Plan" sub="Three simple rules to take to the course." back={back}/><div className="stack bottomGap"><PlanCard n="1" title={main.action} body="Use this as your main playing rule next round. Keep it simple and repeat it before each relevant shot." evidence={main.source}/><PlanCard n="2" title="Play the first three holes safely" body="Start steady. Pick targets that remove the worst miss and avoid chasing early birdies." evidence="Your opening holes are now being tracked as a round phase."/><PlanCard n="3" title="Protect against doubles" body="A bogey after a poor shot is fine. The scorecard damage comes from forcing the next one." evidence="This is the fastest improvement route for most mid-handicap golfers."/><div className="two"><Btn onClick={()=>go("prompt")}>Start round</Btn><Btn secondary onClick={()=>go("practice")}>Practise</Btn></div></div><Nav go={go}/></Phone>}
-function Prompt({go,back,round}){const insight=analyse(round)[0];return <Phone><Header title="Hole 4" sub="Smart prompt · based on your plan" back={back}/><div className="stack bottomGap"><Card dark><p className="eyebrow light">Before you hit</p><h2>{insight.action}</h2><p>{insight.detail}</p></Card><Card><p className="eyebrow">Why this prompt appears</p><p>{insight.source}. This prompt only appears when it connects to your current plan.</p></Card><Btn onClick={()=>go("round")}>Log this hole</Btn></div><Nav go={go}/></Phone>}
-function Drill({title,body}){return <Card><div className="row"><b className="tick">✓</b><div><h3>{title}</h3><p>{body}</p></div></div></Card>}
-function Practice({go,back,round}){const insight=analyse(round)[0];return <Phone><Header title="Practice plan" sub="Short, practical and built for your next round." back={back}/><div className="stack bottomGap"><Card dark><p className="eyebrow light">Primary focus</p><h2>{insight.title}</h2><p>{insight.action}</p></Card><Drill title="Start Here · 10 mins" body="Hit 15 balls from 100–150 yards using one extra club. Focus only on solid contact and finishing pin-high, not attacking flags."/><Drill title="Pressure Practice · 15 mins" body="Create a fairway-width target on the range. Hit 10 drives or hybrids and score one point every time the ball finishes inside your target zone."/><Drill title="Take It To The Course · 10 mins" body="Finish with 9 random golf shots. Change club and target every ball. Step back each time and rehearse your full on-course routine before swinging."/><Btn onClick={()=>go("progress")}>Mark practice complete</Btn></div><Nav go={go}/></Phone>}
-function Progress({go,back}){return <Phone><Header title="Progress" sub="Simple trends. No stats overload." back={back}/><div className="stack bottomGap"><Card dark><p className="eyebrow light">Current pattern</p><h2>Approach misses are reducing</h2><p>Your short/right approach pattern has softened over the last three logged rounds.</p></Card><Card><h3>Trend confidence</h3>{[["Round 1","Short/right misses","High"],["Round 2","Fewer short misses","Improving"],["Round 3","More greens hit","Stronger"]].map(([r,l,s])=><div className="trend" key={r}><div><b>{r}</b><p>{l}</p></div><span>{s}</span></div>)}</Card><Btn onClick={()=>go("plan")}>View updated plan</Btn></div><Nav go={go}/></Phone>}
+function Button({ children, onClick, variant = "primary", className = "" }) {
+  const base = "inline-flex min-h-[54px] items-center justify-center rounded-2xl px-4 py-3 font-semibold transition active:scale-[0.98]";
+  const style = variant === "outline" ? "border border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50" : "bg-zinc-950 text-white hover:bg-zinc-800";
+  return <button type="button" onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
+}
 
-export default function App(){
-  const[screen,setScreen]=useState("welcome"),[history,setHistory]=useState([]),[round,setRound]=useState(initialRound),[hole,setHole]=useState(4),[lastSaved,setLastSaved]=useState(null);
-  const go=s=>{if(!screens.includes(s))return;setHistory(h=>[...h,screen]);setScreen(s)};
-  const back=()=>setHistory(h=>{if(!h.length)return h;setScreen(h[h.length-1]);return h.slice(0,-1)});
-  const props={go,back,round,setRound,hole,setHole,lastSaved,setLastSaved};
-  return <div>{screen==="welcome"&&<Welcome {...props}/>} {screen==="profile"&&<Profile {...props}/>} {screen==="home"&&<Home {...props}/>} {screen==="ready"&&<Ready {...props}/>} {screen==="round"&&<Round {...props}/>} {screen==="hole"&&<Hole {...props}/>} {screen==="review"&&<Review {...props}/>} {screen==="plan"&&<Plan {...props}/>} {screen==="prompt"&&<Prompt {...props}/>} {screen==="practice"&&<Practice {...props}/>} {screen==="progress"&&<Progress {...props}/>}<div className="side">{screens.map(s=><button key={s} onClick={()=>setScreen(s)} className={screen===s?"active":""}>{labels[s]}</button>)}</div></div>
+function Card({ children, className = "" }) {
+  return <div className={`rounded-3xl border border-zinc-100 bg-white shadow-sm ${className}`}>{children}</div>;
+}
+
+function Pill({ children, active = false, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className={`rounded-full px-3 py-2 text-sm transition active:scale-[0.98] ${active ? "bg-zinc-950 text-white" : "bg-zinc-100 text-zinc-700"}`}>
+      {children}
+    </button>
+  );
+}
+
+function PhoneShell({ children }) {
+  return (
+    <div className="mx-auto flex min-h-screen w-full items-center justify-center bg-zinc-100 p-4">
+      <div className="relative h-[844px] w-[390px] overflow-hidden rounded-[46px] border-[10px] border-zinc-900 bg-white shadow-2xl">
+        <div className="absolute left-1/2 top-0 z-20 h-7 w-36 -translate-x-1/2 rounded-b-3xl bg-zinc-900" />
+        <div className="h-full overflow-hidden bg-white pt-8">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Header({ title, subtitle, onBack, showBack = true }) {
+  return (
+    <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white/90 px-5 pb-3 pt-4 backdrop-blur">
+      <div className="flex items-center gap-3">
+        {showBack ? <button type="button" onClick={onBack} className="rounded-full bg-zinc-100 p-2 active:scale-[0.98]"><Icon symbol="‹" size={20} /></button> : <div className="h-9 w-9" />}
+        <div>
+          <h1 className="text-lg font-semibold text-zinc-950">{title}</h1>
+          {subtitle && <p className="text-xs text-zinc-500">{subtitle}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BottomNav({ go }) {
+  return (
+    <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-100 bg-white px-4 pb-6 pt-2">
+      <div className="grid grid-cols-5 gap-2 text-xs">
+        <button type="button" onClick={() => go("home")} className="flex flex-col items-center gap-1 rounded-2xl p-2 text-zinc-600"><Icon symbol="⛳" size={18} /> Home</button>
+        <button type="button" onClick={() => go("ready_to_play")} className="flex flex-col items-center gap-1 rounded-2xl p-2 text-zinc-600"><Icon symbol="◌" size={18} /> Ready</button>
+        <button type="button" onClick={() => go("round_capture")} className="flex flex-col items-center gap-1 rounded-2xl p-2 text-zinc-600"><Icon symbol="＋" size={18} /> Round</button>
+        <button type="button" onClick={() => go("next_plan")} className="flex flex-col items-center gap-1 rounded-2xl p-2 text-zinc-600"><Icon symbol="◎" size={18} /> Plan</button>
+        <button type="button" onClick={() => go("practice")} className="flex flex-col items-center gap-1 rounded-2xl p-2 text-zinc-600"><Icon symbol="◉" size={18} /> Practice</button>
+      </div>
+    </div>
+  );
+}
+
+function Welcome({ go }) {
+  return (
+    <div className="flex h-full flex-col justify-between p-6 pb-8">
+      <div className="pt-14">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-zinc-950 text-white"><Icon symbol="⛳" size={30} /></div>
+        <h1 className="text-4xl font-bold tracking-tight text-zinc-950">Sugar Caddie</h1>
+        <p className="mt-4 text-lg leading-7 text-zinc-600">An easier way to track a round, spot patterns and play the next one with a clearer plan.</p>
+      </div>
+      <div className="space-y-3">
+        <Card><div className="space-y-3 p-4 text-sm text-zinc-700"><div className="flex gap-3"><Icon symbol="✓" size={18} /> Simple post-hole tracking</div><div className="flex gap-3"><Icon symbol="✓" size={18} /> Clear insight from your playing patterns</div><div className="flex gap-3"><Icon symbol="✓" size={18} /> Practice that transfers to the course</div></div></Card>
+        <Button onClick={() => go("profile")} className="h-14 w-full text-base">Get started</Button>
+      </div>
+    </div>
+  );
+}
+
+function Profile({ go, back }) {
+  const [hcp, setHcp] = useState(14);
+  const [goal, setGoal] = useState("Break 80");
+  return (
+    <div className="h-full">
+      <Header title="Your golfer profile" subtitle="A quick setup so advice feels relevant." onBack={back} />
+      <div className="space-y-6 p-5">
+        <Card><div className="p-5"><p className="text-sm font-medium text-zinc-500">Current handicap</p><div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => setHcp(Math.max(1, hcp - 1))} className="rounded-full bg-zinc-100 p-3"><Icon symbol="−" size={18} /></button><div className="text-6xl font-bold tracking-tight">{hcp}</div><button type="button" onClick={() => setHcp(hcp + 1)} className="rounded-full bg-zinc-100 p-3"><Icon symbol="+" size={18} /></button></div></div></Card>
+        <div><p className="mb-3 text-sm font-medium text-zinc-500">Main goal</p><div className="flex flex-wrap gap-2">{["Break 90", "Break 85", "Break 80", "Single figures"].map((x) => <Pill key={x} active={goal === x} onClick={() => setGoal(x)}>{x}</Pill>)}</div></div>
+        <Button onClick={() => go("home")} className="h-14 w-full text-base">Continue</Button>
+      </div>
+    </div>
+  );
+}
+
+function Home({ go }) {
+  return (
+    <div className="h-full pb-24">
+      <Header title="Today" subtitle="Get ready, play, then review what mattered." showBack={false} />
+      <div className="space-y-5 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><p className="text-sm opacity-70">Before you tee off</p><h2 className="mt-2 text-3xl font-bold">Ready to Play</h2><p className="mt-3 text-sm leading-6 text-zinc-300">A short warm-up to loosen up, find rhythm and settle your first tee focus.</p><button type="button" onClick={() => go("ready_to_play")} className="mt-5 h-12 rounded-2xl bg-white px-5 font-semibold text-black">Start prep</button></div>
+        <Card><div className="p-5"><h3 className="font-semibold">How better rounds are built</h3><p className="mt-2 text-sm leading-6 text-zinc-500">A simple rhythm that helps you learn from each round and carry improvements into the next one.</p><div className="mt-5 flex items-center justify-between gap-2 text-center"><div className="flex-1"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">1</div><p className="mt-2 text-xs font-medium text-zinc-600">Play</p></div><div className="h-px flex-1 bg-zinc-200" /><div className="flex-1"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">2</div><p className="mt-2 text-xs font-medium text-zinc-600">Review</p></div><div className="h-px flex-1 bg-zinc-200" /><div className="flex-1"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">3</div><p className="mt-2 text-xs font-medium text-zinc-600">Practise</p></div><div className="h-px flex-1 bg-zinc-200" /><div className="flex-1"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">4</div><p className="mt-2 text-xs font-medium text-zinc-600">Improve</p></div></div></div></Card>
+        <Button onClick={() => go("round_capture")} className="h-14 w-full text-base">Start round capture</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function ReadyToPlay({ go, back }) {
+  const moves = ["Shoulder turns", "Hip openers", "Hamstring sweep", "Wrist circles", "Three easy swings"];
+  return (
+    <div className="h-full pb-24">
+      <Header title="Ready to Play" subtitle="Four minutes. Calm body, clear first tee." onBack={back} />
+      <div className="space-y-4 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><p className="text-sm opacity-70">First tee reset</p><h2 className="mt-2 text-3xl font-bold">Loosen up and find rhythm</h2><p className="mt-3 text-sm leading-6 text-zinc-300">Simple movements you can do by the car park or practice green.</p><p className="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-xs leading-5 text-zinc-200">Better starts usually lead to steadier opening holes.</p></div>
+        {moves.map((m, i) => <Card key={m}><div className="flex items-center gap-4 p-4"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-950 text-white text-sm">{i + 1}</div><div><p className="font-semibold">{m}</p><p className="text-sm text-zinc-500">30–45 seconds. Smooth and easy.</p></div></div></Card>)}
+        <Card><div className="p-5"><p className="text-sm font-medium text-zinc-500">First tee focus</p><p className="mt-2 text-lg font-semibold">Pick a safe target. Commit to one smooth swing.</p></div></Card>
+        <Button onClick={() => go("round_capture")} className="h-14 w-full text-base">Start round</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function HoleGrid({ round, selectedHole, setSelectedHole }) {
+  return (
+    <div className="grid grid-cols-6 gap-2">
+      {round.map((h, index) => {
+        const active = index === selectedHole;
+        return (
+          <button
+            key={h.hole}
+            type="button"
+            onClick={() => {
+              setSelectedHole(index);
+              window.requestAnimationFrame(() => {
+                const event = new CustomEvent("openHoleDetail");
+                window.dispatchEvent(event);
+              });
+            }}
+            className={`rounded-2xl px-2 py-3 text-center text-sm transition active:scale-[0.98] ${
+              active
+                ? "bg-zinc-950 text-white"
+                : h.saved
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                : "bg-zinc-100 text-zinc-500"
+            }`}
+          >
+            <div className="font-semibold">{h.hole}</div>
+            <div className="mt-1 text-[10px]">
+              {h.saved ? "Saved" : active ? "Now" : ""}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RoundCapture({ go, back, round, selectedHole, setSelectedHole, lastSaved }) {
+  React.useEffect(() => {
+    const handler = () => go("hole_detail");
+    window.addEventListener("openHoleDetail", handler);
+    return () => window.removeEventListener("openHoleDetail", handler);
+  }, [go]);
+  const completed = round.filter((h) => h.saved).length;
+  const current = round[selectedHole];
+  return (
+    <div className="h-full pb-24">
+      <Header title="Round capture" subtitle="Simple post-hole tracking" onBack={back} />
+      <div className="space-y-4 p-5">
+        {lastSaved && <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">Hole {lastSaved} saved. Ready for the next one.</div>}
+        <Card><div className="p-5"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs text-zinc-500">Current hole</p><p className="text-3xl font-bold">Hole {current.hole}</p></div><div className="rounded-full bg-zinc-100 px-3 py-2 text-sm">Par {current.par}</div></div><div className="h-2 rounded-full bg-zinc-100"><div className="h-2 rounded-full bg-zinc-950" style={{ width: `${(completed / 18) * 100}%` }} /></div><p className="mt-2 text-xs text-zinc-500">{completed} of 18 holes saved</p></div></Card>
+        <HoleGrid round={round} selectedHole={selectedHole} setSelectedHole={setSelectedHole} />
+        <div className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+          Most golfers log each hole walking to the next tee.
+        </div>
+        <Button onClick={() => go("round_summary")} className="h-14 w-full text-base">Finish and review</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function TagSection({ title, hint, options, selected, onToggle }) {
+  return <Card><div className="p-4"><div className="mb-3"><p className="font-semibold">{title}</p><p className="text-xs text-zinc-500">{hint}</p></div><div className="flex flex-wrap gap-2">{options.map((x) => <Pill key={x} active={selected.includes(x)} onClick={() => onToggle(x)}>{x}</Pill>)}</div></div></Card>;
+}
+
+function HoleDetail({ go, back, round, setRound, selectedHole, setSelectedHole, setLastSaved }) {
+  const hole = round[selectedHole];
+  const updateHole = (patch) => setRound((prev) => prev.map((h, i) => i === selectedHole ? { ...h, ...patch } : h));
+  const toggle = (section, tag) => updateHole({ [section]: hole[section].includes(tag) ? hole[section].filter((x) => x !== tag) : [...hole[section], tag] });
+  const save = () => {
+    updateHole({ saved: true });
+    setLastSaved(hole.hole);
+    setSelectedHole(Math.min(selectedHole + 1, 17));
+    go("round_capture");
+  };
+  return (
+    <div className="h-full pb-6">
+      <Header title={`Hole ${hole.hole}`} subtitle={`Par ${hole.par} · Quick round capture`} onBack={back} />
+      <div className="h-[730px] space-y-4 overflow-y-auto p-5">
+        <Card><div className="p-5"><p className="text-sm font-medium text-zinc-500">Score</p><div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => updateHole({ score: Math.max(1, hole.score - 1) })} className="rounded-full bg-zinc-100 p-3"><Icon symbol="−" size={18} /></button><div className="text-6xl font-bold tracking-tight">{hole.score}</div><button type="button" onClick={() => updateHole({ score: hole.score + 1 })} className="rounded-full bg-zinc-100 p-3"><Icon symbol="+" size={18} /></button></div></div></Card>
+        <TagSection title="Tee shot" hint="Only the first shot on par 4s and par 5s." options={["Fairway hit", "Miss left", "Miss right", "Penalty", "Recovery shot"]} selected={hole.tee} onToggle={(tag) => toggle("tee", tag)} />
+        <TagSection title="Approach" hint="The shot into the green." options={["Green hit", "Miss short", "Miss left", "Miss right", "Miss long"]} selected={hole.approach} onToggle={(tag) => toggle("approach", tag)} />
+        <TagSection title="Around green" hint="Only if you missed the green." options={["Up and down", "Poor chip", "Bunker miss", "Good recovery"]} selected={hole.aroundGreen} onToggle={(tag) => toggle("aroundGreen", tag)} />
+        <TagSection title="Putting" hint="What happened once you reached the green." options={["1-putt", "2-putt", "3-putt"]} selected={hole.putting} onToggle={(tag) => toggle("putting", tag)} />
+        <Button onClick={save} className="min-h-[56px] w-full text-base">Save hole and continue</Button>
+      </div>
+    </div>
+  );
+}
+
+function RoundSummary({ go, back, round }) {
+  const insights = analyseRound(round);
+  const saved = round.filter((h) => h.saved).length;
+  return (
+    <div className="h-full pb-24">
+      <Header title="Round review" subtitle="Clear patterns from your saved holes." onBack={back} />
+      <div className="space-y-4 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><p className="text-sm opacity-70">Round reflection</p><h2 className="mt-2 text-3xl font-bold">You were closer than the score suggests</h2><p className="mt-3 text-sm leading-6 text-zinc-300">Most dropped shots came from one recurring pattern rather than your whole game breaking down.</p><p className="mt-4 rounded-full bg-white/10 px-3 py-2 text-xs">{insights[0].source}</p></div>
+        <Card><div className="p-5"><div className="mb-2 flex items-center justify-between gap-3"><p className="font-semibold">What stayed solid</p><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">Positive trend</span></div><p className="text-sm leading-6 text-zinc-600">Your putting stayed steady and avoided extra damage once you reached the green.</p><p className="mt-3 text-xs font-medium text-zinc-500">Based on your saved holes</p></div></Card>
+        {insights.map((item) => <Card key={item.title}><div className="p-5"><div className="mb-2 flex items-center justify-between gap-3"><p className="font-semibold">{item.title}</p><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">{item.confidence}</span></div><p className="text-sm leading-6 text-zinc-600">{item.detail}</p><p className="mt-3 text-xs font-medium text-zinc-500">{item.source}</p></div></Card>)}
+        <Card><div className="p-5"><p className="text-sm font-medium text-zinc-500">Credibility note</p><p className="mt-2 text-sm leading-6 text-zinc-600">Your plan is based on repeated behaviours you logged during the round, not generic tips. More rounds will make the pattern clearer.</p></div></Card>
+        <div className="grid grid-cols-2 gap-3">
+          <Button onClick={() => go("next_plan")} className="h-14 text-base">Next Round Plan</Button>
+          <Button onClick={() => go("practice")} variant="outline" className="h-14 text-base">Practice ideas</Button>
+        </div>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function PlanCard({ number, title, body, evidence }) {
+  return <Card><div className="flex gap-4 p-5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-sm font-bold text-white">{number}</div><div><h3 className="font-semibold text-zinc-950">{title}</h3><p className="mt-1 text-sm leading-6 text-zinc-600">{body}</p><p className="mt-3 text-xs font-medium text-zinc-500">{evidence}</p></div></div></Card>;
+}
+
+function NextPlan({ go, back, round }) {
+  const insights = analyseRound(round);
+  const main = insights[0];
+  return (
+    <div className="h-full pb-24">
+      <Header title="Next Round Plan" subtitle="Three simple rules to take to the course." onBack={back} />
+      <div className="space-y-4 p-5">
+        <PlanCard number="1" title={main.action} body="Use this as your main playing rule next round. Keep it simple and repeat it before each relevant shot." evidence={main.source} />
+        <PlanCard number="2" title="Play the first three holes safely" body="Start steady. Pick targets that remove the worst miss and avoid chasing early birdies." evidence="Your opening holes are now being tracked as a round phase." />
+        <PlanCard number="3" title="Protect against doubles" body="A bogey after a poor shot is fine. The scorecard damage comes from forcing the next one." evidence="This is the fastest improvement route for most mid-handicap golfers." />
+        <div className="grid grid-cols-2 gap-3"><Button onClick={() => go("in_round")} className="h-14 text-base"><span className="mr-2">▶</span>Start round</Button><Button onClick={() => go("practice")} variant="outline" className="h-14 text-base"><span className="mr-2">◉</span>Practise</Button></div>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function InRound({ go, back, round }) {
+  const insight = analyseRound(round)[0];
+  return (
+    <div className="h-full pb-24">
+      <Header title="Hole 4" subtitle="Smart prompt · based on your plan" onBack={back} />
+      <div className="space-y-4 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10"><Icon symbol="!" size={24} /></div><p className="text-sm opacity-70">Before you hit</p><h2 className="mt-2 text-3xl font-bold">{insight.action}</h2><p className="mt-3 text-sm leading-6 text-zinc-300">{insight.detail}</p></div>
+        <Card><div className="p-5"><p className="text-sm font-medium text-zinc-500">Why this prompt appears</p><p className="mt-2 text-sm leading-6 text-zinc-600">{insight.source}. This prompt only appears when it connects to your current plan.</p></div></Card>
+        <Button onClick={() => go("round_capture")} className="h-14 w-full text-base">Log this hole</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function Drill({ title, body }) {
+  return <Card><div className="flex gap-4 p-5"><Icon symbol="✓" size={22} /><div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-6 text-zinc-600">{body}</p></div></div></Card>;
+}
+
+function Practice({ go, back, round }) {
+  const insight = analyseRound(round)[0];
+  return (
+    <div className="h-full pb-24">
+      <Header title="Practice plan" subtitle="Short, practical and built for your next round." onBack={back} />
+      <div className="space-y-4 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><p className="text-sm opacity-70">Primary focus</p><h2 className="mt-2 text-3xl font-bold">{insight.title}</h2><p className="mt-3 text-sm leading-6 text-zinc-300">{insight.action}</p></div>
+        <Drill title="Start Here · 10 mins" body="Hit 15 balls from 100–150 yards using one extra club. Focus only on solid contact and finishing pin-high, not attacking flags." />
+        <Drill title="Pressure Practice · 15 mins" body="Create a fairway-width target on the range. Hit 10 drives or hybrids and score one point every time the ball finishes inside your target zone." />
+        <Drill title="Take It To The Course · 10 mins" body="Finish with 9 random golf shots. Change club and target every ball. Step back each time and rehearse your full on-course routine before swinging." />
+        <Button onClick={() => go("progress")} className="h-14 w-full text-base">Mark practice complete</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+function Progress({ go, back }) {
+  return (
+    <div className="h-full pb-24">
+      <Header title="Progress" subtitle="Simple trends. No stats overload." onBack={back} />
+      <div className="space-y-4 p-5">
+        <div className="rounded-[2rem] bg-zinc-950 p-6 text-white"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10"><Icon symbol="★" size={24} /></div><p className="text-sm opacity-70">Current pattern</p><h2 className="mt-2 text-3xl font-bold">Approach misses are reducing</h2><p className="mt-3 text-sm text-zinc-300">Your short/right approach pattern has softened over the last three logged rounds.</p></div>
+        <Card><div className="p-5"><h3 className="font-semibold">Trend confidence</h3><div className="mt-5 space-y-4">{[["Round 1", "Short/right misses", "High"], ["Round 2", "Fewer short misses", "Improving"], ["Round 3", "More greens hit", "Stronger"]].map(([r, label, status]) => <div key={r} className="flex items-center justify-between rounded-2xl bg-zinc-50 p-3"><div><p className="font-medium">{r}</p><p className="text-sm text-zinc-500">{label}</p></div><span className="rounded-full bg-white px-3 py-1 text-xs text-zinc-600">{status}</span></div>)}</div></div></Card>
+        <Button onClick={() => go("next_plan")} className="h-14 w-full text-base">View updated plan</Button>
+      </div>
+      <BottomNav go={go} />
+    </div>
+  );
+}
+
+export default function SmartCaddiePrototype() {
+  const [screen, setScreen] = useState("welcome");
+  const [history, setHistory] = useState([]);
+  const [round, setRound] = useState(buildInitialRound);
+  const [selectedHole, setSelectedHole] = useState(4);
+  const [lastSaved, setLastSaved] = useState(null);
+
+  const go = (next) => {
+    if (!screens.includes(next)) return;
+    setHistory((h) => [...h, screen]);
+    setScreen(next);
+  };
+
+  const back = () => {
+    setHistory((h) => {
+      if (!h.length) return h;
+      const next = h[h.length - 1];
+      setScreen(next);
+      return h.slice(0, -1);
+    });
+  };
+
+  const current = useMemo(() => {
+    const props = { go, back, round, setRound, selectedHole, setSelectedHole, lastSaved, setLastSaved };
+    switch (screen) {
+      case "welcome": return <Welcome {...props} />;
+      case "profile": return <Profile {...props} />;
+      case "home": return <Home {...props} />;
+      case "ready_to_play": return <ReadyToPlay {...props} />;
+      case "round_capture": return <RoundCapture {...props} />;
+      case "hole_detail": return <HoleDetail {...props} />;
+      case "round_summary": return <RoundSummary {...props} />;
+      case "next_plan": return <NextPlan {...props} />;
+      case "in_round": return <InRound {...props} />;
+      case "practice": return <Practice {...props} />;
+      case "progress": return <Progress {...props} />;
+      default: return <Welcome {...props} />;
+    }
+  }, [screen, history, round, selectedHole, lastSaved]);
+
+  return (
+    <div className="min-h-screen bg-zinc-100">
+      <div className="fixed left-4 top-4 z-50 hidden w-64 rounded-3xl bg-white p-4 shadow-xl lg:block">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">V2 clickable flow</p>
+        <div className="space-y-1">{screens.map((s) => <button key={s} type="button" onClick={() => setScreen(s)} className={`w-full rounded-2xl px-3 py-2 text-left text-sm ${screen === s ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{screenLabels[s]}</button>)}</div>
+      </div>
+      <PhoneShell>{current}</PhoneShell>
+    </div>
+  );
 }
